@@ -31,7 +31,7 @@ class Settings(BaseModel):
     # --- Database ---
     database_url: str = os.getenv(
         "DATABASE_URL",
-        "postgresql://user:pass@localhost:5432/support_platform",
+        "sqlite:///./support_platform.db",
     )
 
     # --- Embedding ---

@@ -1,10 +1,11 @@
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
 from orchestrator.state import SupportState
 from orchestrator.agents.router import route_intent
 from orchestrator.agents.rag_agent import rag_agent_node
 from orchestrator.agents.action_agent import action_agent_node
 from orchestrator.agents.escalation_agent import escalation_agent_node
+import sqlite3
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 # Create graph
 graph = StateGraph(SupportState)
@@ -45,8 +46,9 @@ graph.add_edge("escalation_agent", END)
 # Set entry point
 graph.set_entry_point("router")
 
-# For local dev, use MemorySaver (Postgres later per build guide)
-memory = MemorySaver()
+# For local dev, use SqliteSaver
+conn = sqlite3.connect("support_platform_checkpoints.db", check_same_thread=False)
+memory = SqliteSaver(conn)
 
 # Compile
 compiled_graph = graph.compile(checkpointer=memory)

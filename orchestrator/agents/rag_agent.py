@@ -5,10 +5,18 @@ from orchestrator.state import SupportState
 from orchestrator.models import RAGResponse
 from retrieval.hybrid_retriever import hybrid_search
 from retrieval.reranker import rerank
+from evaluation.confidence_scorer import compute_unified_confidence
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
 import config
 import logging
+from db.models import Message, RetrievalLog, ConfidenceScore
 
 logger = logging.getLogger(__name__)
+
+# Engine for DB logging
+engine = create_engine(config.settings.database_url)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def rag_agent_node(state: SupportState) -> SupportState:
     """
@@ -31,8 +39,11 @@ def rag_agent_node(state: SupportState) -> SupportState:
     retrieved_context = state.get("retrieved_context", [])
     retry_count = state.get("retry_count", 0)
     
+    # If retrying, increase search scope to cast a wider net
+    search_top_k = config.settings.retrieval_top_k * 2 if retry_count > 0 else config.settings.retrieval_top_k
+    
     if not retrieved_context or retry_count > 0:
-        candidates = hybrid_search(query, top_k=config.settings.retrieval_top_k)
+        candidates = hybrid_search(query, top_k=search_top_k)
         reranked = rerank(query, candidates, top_n=config.settings.rerank_top_n)
         retrieved_context = [doc["text"] for doc in reranked]
         
@@ -67,15 +78,54 @@ def rag_agent_node(state: SupportState) -> SupportState:
     
     if response:
         answer = response.answer
-        confidence = response.confidence
+        llm_confidence = response.confidence
     else:
         answer = "I'm sorry, I couldn't generate a response."
-        confidence = 0.0
+        llm_confidence = 0.0
+        
+    # We estimate retrieval score as the max rerank score, or 0.5 if not available
+    max_retrieval_score = reranked[0]["score"] if reranked else 0.5
+    
+    final_confidence = compute_unified_confidence(
+        retrieval_score=max_retrieval_score,
+        llm_confidence=llm_confidence,
+        answer=answer,
+        retrieved_context=retrieved_context
+    )
+    
+    # Optional: Log telemetry asynchronously in production. Here we log synchronously.
+    try:
+        with SessionLocal() as db:
+            # We would normally link to an actual conversation_id, but here we just create a log entry
+            log_msg = Message(role="ai", content=answer)
+            db.add(log_msg)
+            db.flush()
+            
+            retrieval_log = RetrievalLog(
+                message_id=log_msg.id,
+                query=query,
+                retrieved_chunks=[doc["text"] for doc in reranked] if reranked else [],
+                rerank_scores=[doc["score"] for doc in reranked] if reranked else []
+            )
+            
+            conf_score = ConfidenceScore(
+                message_id=log_msg.id,
+                retrieval_score=max_retrieval_score,
+                llm_confidence=llm_confidence,
+                groundedness=final_confidence, # Rough proxy for now
+                final_score=final_confidence
+            )
+            
+            db.add(retrieval_log)
+            db.add(conf_score)
+            db.commit()
+    except Exception as e:
+        logger.error(f"Failed to log telemetry: {e}")
         
     # Append the AI's response to the messages
     return {
         "messages": [AIMessage(content=answer)],
         "retrieved_context": retrieved_context,
-        "confidence": confidence,
+        "confidence": final_confidence,
         "retry_count": retry_count + 1
     }

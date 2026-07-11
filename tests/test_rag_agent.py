@@ -9,7 +9,7 @@ from orchestrator.models import RAGResponse
 @patch("orchestrator.agents.rag_agent.ChatGroq")
 def test_rag_agent_short_query(mock_chat_groq, mock_rerank, mock_hybrid_search):
     mock_hybrid_search.return_value = []
-    mock_rerank.return_value = [{"text": "Context text"}]
+    mock_rerank.return_value = [{"text": "Context text", "score": 0.85}]
     
     mock_llm = MagicMock()
     mock_structured = MagicMock()
@@ -28,7 +28,7 @@ def test_rag_agent_short_query(mock_chat_groq, mock_rerank, mock_hybrid_search):
     new_state = rag_agent_node(state)
     assert len(new_state["messages"]) == 1
     assert new_state["messages"][0].content == "Yes"
-    assert new_state["confidence"] == 0.9
+    assert new_state["confidence"] == 0.925
     assert new_state["retry_count"] == 1
     assert "Context text" in new_state["retrieved_context"]
 
@@ -52,7 +52,7 @@ def test_rag_agent_retry(mock_chat_gemini):
     with patch("orchestrator.agents.rag_agent.hybrid_search") as mock_hybrid, \
          patch("orchestrator.agents.rag_agent.rerank") as mock_rerank:
         mock_hybrid.return_value = []
-        mock_rerank.return_value = [{"text": "New context text"}]
+        mock_rerank.return_value = [{"text": "New context text", "score": 0.9}]
         
         new_state = rag_agent_node(state)
         
