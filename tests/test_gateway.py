@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from unittest.mock import AsyncMock
 from gateway.main import app
 import uuid
 import pytest
@@ -22,13 +23,13 @@ def mock_graph(mocker):
 async def test_chat_endpoint_success(mock_graph):
     from langchain_core.messages import AIMessage
     
-    # Mock the return state of the graph
-    mock_graph.ainvoke.return_value = {
+    # ainvoke is async — must use AsyncMock so `await` works
+    mock_graph.ainvoke = AsyncMock(return_value={
         "messages": [AIMessage(content="Hello from mock!")],
         "confidence": 0.95,
         "intent": "faq",
         "retry_count": 0
-    }
+    })
     
     conv_id = str(uuid.uuid4())
     payload = {
