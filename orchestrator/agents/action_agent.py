@@ -66,6 +66,8 @@ def action_agent_node(state: SupportState) -> SupportState:
 
 Based ONLY on the following knowledge base documentation, provide a clear, step-by-step response to help the user complete their action. If the documentation does not cover the user's request, say so honestly and suggest contacting support@flowdesk.com.
 
+CRITICAL: The confidence score MUST be a raw number (e.g., 0.0 or 1.0). Do not enclose it in quotes.
+
 Knowledge Base:
 {context_str}
 
@@ -77,7 +79,10 @@ Respond with a helpful, actionable answer. Classify the action_type as one of: '
     try:
         response = structured_llm.invoke(prompt)
         answer = response.answer
-        llm_confidence = response.confidence
+        try:
+            llm_confidence = float(response.confidence)
+        except (ValueError, TypeError):
+            llm_confidence = 0.0
         _action_type = response.action_type  # Logged for future analytics
     except Exception as e:
         logger.error("Action agent LLM call failed: %s", e)

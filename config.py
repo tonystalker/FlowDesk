@@ -32,7 +32,7 @@ class Settings(BaseModel):
     database_url: str = os.getenv("DATABASE_URL") or "sqlite:///./support_platform.db"
 
     # --- Embedding ---
-    embedding_model: str = os.getenv("EMBEDDING_MODEL") or "models/text-embedding-004"
+    embedding_model: str = os.getenv("EMBEDDING_MODEL") or "models/gemini-embedding-2"
     embedding_dimension: int = int(os.getenv("EMBEDDING_DIMENSION") or "768")
 
     # --- Retrieval ---

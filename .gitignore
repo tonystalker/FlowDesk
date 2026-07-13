@@ -27,3 +27,8 @@ Thumbs.db
 skill.md
 build_guide.md
 implemantation_plan.md
+
+# Local Databases
+*.db
+*.db-shm
+*.db-wal

@@ -59,13 +59,15 @@ def rag_agent_node(state: SupportState) -> SupportState:
         llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
     else:
         logger.info(f"Using Gemini for RAG (retry={retry_count}, multi_turn={is_multi_turn}, length={len(query)})")
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature=0)
+        llm = ChatGoogleGenerativeAI(model="gemini-3.5-flash", temperature=0)
         
     structured_llm = llm.with_structured_output(RAGResponse)
     
     prompt = f"""
     You are a helpful customer support assistant. Answer the user's question based ONLY on the following context.
     If the context does not contain the answer, say "I don't know" and give a low confidence score (e.g. 0.0).
+    
+    CRITICAL: The confidence score MUST be a raw number (e.g., 0.0 or 1.0). Do not enclose it in quotes.
     
     Context:
     {context_str}
@@ -78,7 +80,10 @@ def rag_agent_node(state: SupportState) -> SupportState:
     
     if response:
         answer = response.answer
-        llm_confidence = response.confidence
+        try:
+            llm_confidence = float(response.confidence)
+        except (ValueError, TypeError):
+            llm_confidence = 0.0
     else:
         answer = "I'm sorry, I couldn't generate a response."
         llm_confidence = 0.0
