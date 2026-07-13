@@ -19,9 +19,17 @@ from orchestrator.state import SupportState
 
 logger = logging.getLogger(__name__)
 
-# Engine for DB logging (skill.md §6)
-engine = create_engine(config.settings.database_url)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Lazy DB engine — created on first use to avoid crashing at import time
+_engine = None
+_SessionLocal = None
+
+def _get_db():
+    """Return a session factory, creating the engine on first call."""
+    global _engine, _SessionLocal
+    if _SessionLocal is None:
+        _engine = create_engine(config.settings.database_url)
+        _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
+    return _SessionLocal
 
 
 def escalation_agent_node(state: SupportState) -> SupportState:
@@ -52,7 +60,7 @@ def escalation_agent_node(state: SupportState) -> SupportState:
 
     # Log to PostgreSQL (skill.md §6)
     try:
-        with SessionLocal() as db:
+        with _get_db()() as db:
             conversation = Conversation()
             db.add(conversation)
             db.flush()

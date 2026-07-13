@@ -9,9 +9,7 @@ prompt.  This module scores each (query, candidate_text) pair through
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
-
-from sentence_transformers import CrossEncoder
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from retrieval.hybrid_retriever import RetrievalResult
@@ -19,15 +17,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Module-level singleton so the model is loaded once per process.
-_model: CrossEncoder | None = None
+_model: Any = None
 _MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 
-def _get_model() -> CrossEncoder:
-    """Lazy-load the cross-encoder model (downloads on first run)."""
+def _get_model() -> Any:
+    """Lazy-load the cross-encoder model (import + download deferred to first call)."""
     global _model
     if _model is None:
         logger.info("Loading cross-encoder model: %s", _MODEL_NAME)
+        from sentence_transformers import CrossEncoder  # deferred — avoids startup cost
         _model = CrossEncoder(_MODEL_NAME)
         logger.info("Cross-encoder model loaded")
     return _model

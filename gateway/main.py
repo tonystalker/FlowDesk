@@ -23,7 +23,17 @@ from typing import Optional
 
 import config
 from db.models import Feedback
-from orchestrator.graph import compiled_graph
+
+# Lazy-load the compiled graph to avoid crash at container startup
+# (heavy imports like sentence-transformers / API key validation happen here)
+_compiled_graph = None
+
+def get_graph():
+    global _compiled_graph
+    if _compiled_graph is None:
+        from orchestrator.graph import compiled_graph as _g
+        _compiled_graph = _g
+    return _compiled_graph
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +43,17 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# DB session for feedback logging (skill.md §6)
-engine = create_engine(config.settings.database_url)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Lazy DB session for feedback logging (skill.md §6)
+_engine = None
+_SessionLocal = None
+
+def _get_db():
+    """Return a session factory, creating the DB engine on first call."""
+    global _engine, _SessionLocal
+    if _SessionLocal is None:
+        _engine = create_engine(config.settings.database_url)
+        _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
+    return _SessionLocal
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +103,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
         thread_config = {"configurable": {"thread_id": req.conversation_id}}
 
         initial_state = {"messages": [HumanMessage(content=req.message)]}
-        result = await compiled_graph.ainvoke(initial_state, config=thread_config)
+        result = await get_graph().ainvoke(initial_state, config=thread_config)
 
         ai_message = (
             result["messages"][-1].content
@@ -126,7 +144,7 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
     async def event_generator():
         try:
             # Stream graph events as SSE
-            async for event in compiled_graph.astream_events(
+            async for event in get_graph().astream_events(
                 initial_state, config=thread_config, version="v2"
             ):
                 kind = event.get("event", "")
@@ -180,7 +198,7 @@ async def submit_feedback(req: FeedbackRequest) -> FeedbackResponse:
         raise HTTPException(status_code=400, detail="rating must be 'up' or 'down'")
 
     try:
-        with SessionLocal() as db:
+        with _get_db()() as db:
             feedback = Feedback(
                 conversation_id=req.conversation_id,
                 message_content=req.message_content,

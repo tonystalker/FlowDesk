@@ -14,9 +14,17 @@ from db.models import Message, RetrievalLog, ConfidenceScore
 
 logger = logging.getLogger(__name__)
 
-# Engine for DB logging
-engine = create_engine(config.settings.database_url)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Lazy DB engine — created on first use to avoid crashing at import time
+_engine = None
+_SessionLocal = None
+
+def _get_db():
+    """Return a thread-safe session factory, creating the engine on first call."""
+    global _engine, _SessionLocal
+    if _SessionLocal is None:
+        _engine = create_engine(config.settings.database_url)
+        _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
+    return _SessionLocal
 
 def rag_agent_node(state: SupportState) -> SupportState:
     """
@@ -100,7 +108,7 @@ def rag_agent_node(state: SupportState) -> SupportState:
     
     # Optional: Log telemetry asynchronously in production. Here we log synchronously.
     try:
-        with SessionLocal() as db:
+        with _get_db()() as db:
             # We would normally link to an actual conversation_id, but here we just create a log entry
             log_msg = Message(role="ai", content=answer)
             db.add(log_msg)
