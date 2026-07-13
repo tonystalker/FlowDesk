@@ -16,12 +16,20 @@ from orchestrator.agents.escalation_agent import escalation_agent_node
 from orchestrator.state import SupportState
 
 
-@patch("orchestrator.agents.escalation_agent.SessionLocal")
-def test_escalation_agent_logs_to_db(mock_session):
-    """Escalation agent creates Conversation + Escalation records in the DB."""
+def _mock_get_db():
+    """Helper: return a mock _get_db that yields a mock session."""
     mock_db = MagicMock()
-    mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-    mock_session.return_value.__exit__ = MagicMock(return_value=False)
+    mock_session_factory = MagicMock()
+    mock_session_factory.return_value.__enter__ = MagicMock(return_value=mock_db)
+    mock_session_factory.return_value.__exit__ = MagicMock(return_value=False)
+    return mock_session_factory, mock_db
+
+
+@patch("orchestrator.agents.escalation_agent._get_db")
+def test_escalation_agent_logs_to_db(mock_get_db):
+    """Escalation agent creates Conversation + Escalation records in the DB."""
+    mock_session_factory, mock_db = _mock_get_db()
+    mock_get_db.return_value = mock_session_factory
 
     state: SupportState = {
         "messages": [HumanMessage(content="I'm very frustrated with your service!")],
@@ -38,12 +46,11 @@ def test_escalation_agent_logs_to_db(mock_session):
     assert mock_db.commit.called
 
 
-@patch("orchestrator.agents.escalation_agent.SessionLocal")
-def test_escalation_agent_confidence_is_one(mock_session):
+@patch("orchestrator.agents.escalation_agent._get_db")
+def test_escalation_agent_confidence_is_one(mock_get_db):
     """Escalation is a definitive decision — confidence must be 1.0."""
-    mock_db = MagicMock()
-    mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-    mock_session.return_value.__exit__ = MagicMock(return_value=False)
+    mock_session_factory, mock_db = _mock_get_db()
+    mock_get_db.return_value = mock_session_factory
 
     state: SupportState = {
         "messages": [HumanMessage(content="Let me speak to a manager")],
@@ -58,12 +65,11 @@ def test_escalation_agent_confidence_is_one(mock_session):
     assert result["confidence"] == 1.0
 
 
-@patch("orchestrator.agents.escalation_agent.SessionLocal")
-def test_escalation_agent_returns_handoff_message(mock_session):
+@patch("orchestrator.agents.escalation_agent._get_db")
+def test_escalation_agent_returns_handoff_message(mock_get_db):
     """Escalation agent returns a professional handoff message."""
-    mock_db = MagicMock()
-    mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-    mock_session.return_value.__exit__ = MagicMock(return_value=False)
+    mock_session_factory, mock_db = _mock_get_db()
+    mock_get_db.return_value = mock_session_factory
 
     state: SupportState = {
         "messages": [HumanMessage(content="This is unacceptable!")],
@@ -80,12 +86,11 @@ def test_escalation_agent_returns_handoff_message(mock_session):
     assert "flowdesk" in message.lower()
 
 
-@patch("orchestrator.agents.escalation_agent.SessionLocal")
-def test_escalation_after_retries(mock_session):
+@patch("orchestrator.agents.escalation_agent._get_db")
+def test_escalation_after_retries(mock_get_db):
     """Escalation triggered after self-correction loop exhaustion includes retry info."""
-    mock_db = MagicMock()
-    mock_session.return_value.__enter__ = MagicMock(return_value=mock_db)
-    mock_session.return_value.__exit__ = MagicMock(return_value=False)
+    mock_session_factory, mock_db = _mock_get_db()
+    mock_get_db.return_value = mock_session_factory
 
     state: SupportState = {
         "messages": [HumanMessage(content="What is X?")],
@@ -101,13 +106,15 @@ def test_escalation_after_retries(mock_session):
     assert len(result["messages"]) == 1
 
 
-@patch("orchestrator.agents.escalation_agent.SessionLocal")
-def test_escalation_db_failure_graceful(mock_session):
+@patch("orchestrator.agents.escalation_agent._get_db")
+def test_escalation_db_failure_graceful(mock_get_db):
     """Escalation agent handles DB failures gracefully."""
-    mock_session.return_value.__enter__ = MagicMock(
+    mock_session_factory = MagicMock()
+    mock_session_factory.return_value.__enter__ = MagicMock(
         side_effect=Exception("DB connection refused")
     )
-    mock_session.return_value.__exit__ = MagicMock(return_value=False)
+    mock_session_factory.return_value.__exit__ = MagicMock(return_value=False)
+    mock_get_db.return_value = mock_session_factory
 
     state: SupportState = {
         "messages": [HumanMessage(content="Help me!")],

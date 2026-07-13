@@ -10,19 +10,20 @@ def test_health_check():
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
-# We'll mock the compiled_graph to avoid live LLM calls during the gateway test
+# We'll mock get_graph() to avoid live LLM calls during the gateway test
 @pytest.fixture
 def mock_graph(mocker):
-    # AsyncMock is needed for mocking ainvoke
-    mock = mocker.patch("gateway.main.compiled_graph.ainvoke")
-    return mock
+    # Mock the get_graph function to return a mock graph object
+    mock_g = mocker.MagicMock()
+    mocker.patch("gateway.main.get_graph", return_value=mock_g)
+    return mock_g
 
 @pytest.mark.asyncio
 async def test_chat_endpoint_success(mock_graph):
     from langchain_core.messages import AIMessage
     
     # Mock the return state of the graph
-    mock_graph.return_value = {
+    mock_graph.ainvoke.return_value = {
         "messages": [AIMessage(content="Hello from mock!")],
         "confidence": 0.95,
         "intent": "faq",
@@ -58,10 +59,12 @@ def test_chat_endpoint_missing_body():
 @pytest.fixture
 def mock_feedback_db(mocker):
     """Mock the DB session for feedback tests."""
-    mock_session_cls = mocker.patch("gateway.main.SessionLocal")
+    mock_session_factory = mocker.MagicMock()
     mock_db = mocker.MagicMock()
-    mock_session_cls.return_value.__enter__ = mocker.MagicMock(return_value=mock_db)
-    mock_session_cls.return_value.__exit__ = mocker.MagicMock(return_value=False)
+    mock_session_factory.return_value.__enter__ = mocker.MagicMock(return_value=mock_db)
+    mock_session_factory.return_value.__exit__ = mocker.MagicMock(return_value=False)
+
+    mocker.patch("gateway.main._get_db", return_value=mock_session_factory)
 
     # Mock the feedback object returned after commit + refresh
     mock_feedback = mocker.MagicMock()
@@ -104,4 +107,3 @@ def test_feedback_invalid_rating():
     }
     response = client.post("/feedback", json=payload)
     assert response.status_code == 400
-
