@@ -1,22 +1,37 @@
-"""
-FlowDesk Gradio Demo — Interactive Support Chat Interface.
+"""FlowDesk Gradio Demo — Interactive Support Chat Interface.
 
-Launch with: uv run python gateway/demo.py
+Launch with: uv run python -m gateway.demo
+
+Features:
+- Chat with the LangGraph orchestrator
+- Thumbs up/down feedback on responses (build_guide stretch goal)
+- Metadata display (intent, confidence, retries)
 """
+
+from __future__ import annotations
+
+import logging
+import uuid
 
 import gradio as gr
 from langchain_core.messages import HumanMessage
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+import config
+from db.models import Feedback
 from orchestrator.graph import compiled_graph
-import uuid
-import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# DB session for feedback logging
+engine = create_engine(config.settings.database_url)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 def chat_fn(message: str, history: list) -> str:
-    """
-    Process a user message through the LangGraph orchestrator
+    """Process a user message through the LangGraph orchestrator
     and return a formatted response with metadata.
     """
     if not message.strip():
@@ -55,22 +70,46 @@ def chat_fn(message: str, history: list) -> str:
         return f"⚠️ An error occurred: {str(e)}"
 
 
-demo = gr.ChatInterface(
-    fn=chat_fn,
-    title="🚀 FlowDesk — AI Support Agent",
-    description=(
-        "An LLMOps-driven customer support system powered by LangGraph, "
-        "hybrid RAG retrieval, and multi-model routing (Groq + Gemini)."
-    ),
-    examples=[
-        "What is your refund policy?",
-        "I need to cancel my order #12345",
-        "I want to speak to a human agent",
-        "How do I reset my password?",
-        "What payment methods do you accept?",
-    ],
-    theme=gr.themes.Soft(),
-)
+def vote_fn(data: gr.LikeData) -> None:
+    """Log thumbs up/down feedback to the database (build_guide stretch goal)."""
+    rating = "up" if data.liked else "down"
+    response_content = data.value if isinstance(data.value, str) else str(data.value)
+
+    try:
+        with SessionLocal() as db:
+            feedback = Feedback(
+                conversation_id=None,
+                message_content="",
+                response_content=response_content,
+                rating=rating,
+            )
+            db.add(feedback)
+            db.commit()
+            logger.info("Feedback recorded: rating=%s", rating)
+    except Exception as e:
+        logger.error("Failed to record feedback: %s", e)
+
+
+with gr.Blocks() as demo:
+    chat = gr.ChatInterface(
+        fn=chat_fn,
+        title="🚀 FlowDesk — AI Support Agent",
+        description=(
+            "An LLMOps-driven customer support system powered by LangGraph, "
+            "hybrid RAG retrieval, and multi-model routing (Groq + Gemini).\n\n"
+            "👍👎 Use the thumbs up/down buttons to rate responses!"
+        ),
+        examples=[
+            "What is your refund policy?",
+            "I need to cancel my order #12345",
+            "I want to speak to a human agent",
+            "How do I reset my password?",
+            "What payment methods do you accept?",
+        ],
+    )
+    # Register the like/dislike callback for feedback (inside Blocks context)
+    chat.chatbot.like(vote_fn, None, None)
 
 if __name__ == "__main__":
     demo.launch(share=False)
+

@@ -24,5 +24,5 @@ COPY . .
 # Ensure the virtualenv is used by default
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Run FastAPI
-CMD ["uvicorn", "gateway.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Run migrations and then start FastAPI
+CMD ["sh", "-c", "alembic upgrade head && uvicorn gateway.main:app --host 0.0.0.0 --port 8080"]

@@ -224,22 +224,32 @@ def hybrid_search(
 
     logger.info("Hybrid search: query=%r, top_k=%d", query, top_k)
 
-    dense_results = dense_search(
-        query,
-        api_key=pinecone_api_key,
-        index_name=pinecone_index_name,
-        embedding_api_key=embedding_api_key,
-        embedding_model=embedding_model,
-        top_k=top_k,
-    )
-    logger.info("Dense search returned %d results", len(dense_results))
+    # Dense search — gracefully degrade if embedding/Pinecone fails
+    dense_results: list[RetrievalResult] = []
+    try:
+        dense_results = dense_search(
+            query,
+            api_key=pinecone_api_key,
+            index_name=pinecone_index_name,
+            embedding_api_key=embedding_api_key,
+            embedding_model=embedding_model,
+            top_k=top_k,
+        )
+        logger.info("Dense search returned %d results", len(dense_results))
+    except Exception as e:
+        logger.warning("Dense search failed (falling back to sparse-only): %s", e)
 
-    sparse_results = sparse_search(
-        query,
-        bm25_index_path=bm25_index_path,
-        top_k=top_k,
-    )
-    logger.info("Sparse search returned %d results", len(sparse_results))
+    # Sparse search — gracefully degrade if BM25 index missing
+    sparse_results: list[RetrievalResult] = []
+    try:
+        sparse_results = sparse_search(
+            query,
+            bm25_index_path=bm25_index_path,
+            top_k=top_k,
+        )
+        logger.info("Sparse search returned %d results", len(sparse_results))
+    except Exception as e:
+        logger.warning("Sparse search failed (falling back to dense-only): %s", e)
 
     merged = merge_and_dedupe(
         dense_results,

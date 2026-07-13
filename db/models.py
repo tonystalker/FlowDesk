@@ -54,3 +54,14 @@ class Escalation(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     conversation = relationship("Conversation", back_populates="escalations")
+
+class Feedback(Base):
+    """User feedback (thumbs up/down) on agent responses (build_guide stretch goal)."""
+    __tablename__ = 'feedback'
+    id = Column(Uuid, primary_key=True, default=uuid.uuid4)
+    conversation_id = Column(String(255), nullable=True)
+    message_content = Column(Text)
+    response_content = Column(Text)
+    rating = Column(String(10))  # "up" or "down"
+    created_at = Column(DateTime, default=datetime.utcnow)
+

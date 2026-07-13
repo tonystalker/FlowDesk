@@ -48,3 +48,60 @@ def test_chat_endpoint_missing_body():
     response = client.post("/chat", json={})
     # Should fail validation
     assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Feedback endpoint tests (build_guide stretch goal)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def mock_feedback_db(mocker):
+    """Mock the DB session for feedback tests."""
+    mock_session_cls = mocker.patch("gateway.main.SessionLocal")
+    mock_db = mocker.MagicMock()
+    mock_session_cls.return_value.__enter__ = mocker.MagicMock(return_value=mock_db)
+    mock_session_cls.return_value.__exit__ = mocker.MagicMock(return_value=False)
+
+    # Mock the feedback object returned after commit + refresh
+    mock_feedback = mocker.MagicMock()
+    mock_feedback.id = uuid.uuid4()
+    mock_db.refresh = mocker.MagicMock(side_effect=lambda obj: setattr(obj, "id", mock_feedback.id))
+
+    return mock_db
+
+
+def test_feedback_thumbs_up(mock_feedback_db):
+    payload = {
+        "message_content": "How do I reset my password?",
+        "response_content": "Go to Settings > Security > Change Password.",
+        "rating": "up",
+    }
+    response = client.post("/feedback", json=payload)
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["status"] == "recorded"
+    assert "feedback_id" in data
+
+
+def test_feedback_thumbs_down(mock_feedback_db):
+    payload = {
+        "message_content": "What is my order status?",
+        "response_content": "I am the action agent.",
+        "rating": "down",
+    }
+    response = client.post("/feedback", json=payload)
+    assert response.status_code == 200
+    assert response.json()["status"] == "recorded"
+
+
+def test_feedback_invalid_rating():
+    payload = {
+        "message_content": "test",
+        "response_content": "test",
+        "rating": "invalid",
+    }
+    response = client.post("/feedback", json=payload)
+    assert response.status_code == 400
+
