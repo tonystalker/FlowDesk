@@ -9,18 +9,10 @@ RUN pip install uv
 COPY pyproject.toml uv.lock ./
 
 # Install dependencies (frozen, no dev tools)
-RUN uv sync --frozen --no-dev
-
-# Cloud Run has no GPU — swap CUDA torch for CPU-only and strip ~2.5 GB of
-# NVIDIA libraries that sentence-transformers pulls in transitively.
-RUN .venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu \
-        --force-reinstall --no-deps && \
-    .venv/bin/pip uninstall -y \
-        nvidia-cublas nvidia-cuda-cupti nvidia-cuda-nvrtc nvidia-cuda-runtime \
-        nvidia-cudnn-cu13 nvidia-cufft nvidia-cufile nvidia-curand nvidia-cusolver \
-        nvidia-cusparse nvidia-cusparselt-cu13 nvidia-nccl-cu13 nvidia-nvjitlink \
-        nvidia-nvshmem-cu13 nvidia-nvtx triton cuda-bindings cuda-pathfinder \
-        cuda-toolkit 2>/dev/null || true
+# CPU-only torch is resolved directly via [tool.uv.sources] in pyproject.toml,
+# so no CUDA wheels are ever downloaded — no force-reinstall/uninstall needed.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
 # ---------------------------------------------------------------------------
 # Final stage — lean runtime image
@@ -40,7 +32,8 @@ ENV PATH="/app/.venv/bin:$PATH"
 # Pre-bake the cross-encoder model at build time so it is available in the
 # image and does NOT need to be downloaded at container startup (which would
 # exceed Cloud Run's startup timeout).
-RUN python -c "\
+RUN --mount=type=cache,target=/root/.cache/huggingface \
+    python -c "\
 from sentence_transformers import CrossEncoder; \
 print('Pre-loading cross-encoder model...'); \
 CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2'); \
