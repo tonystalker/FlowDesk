@@ -8,6 +8,10 @@ RUN pip install uv
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
 
+# Install CPU-only PyTorch first — Cloud Run has no GPU, so skip the
+# ~2.5 GB of NVIDIA CUDA libraries that the default torch wheel bundles.
+RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
+
 # Install dependencies (frozen, no dev tools)
 RUN uv sync --frozen --no-dev
 
