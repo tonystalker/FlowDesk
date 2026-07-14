@@ -234,7 +234,7 @@ async def health() -> dict[str, str]:
 # Mount Gradio demo at root — accessible at Service URL /
 # ---------------------------------------------------------------------------
 
-from gateway.demo import demo as gradio_demo
+from gateway.demo import demo as gradio_demo  # noqa: E402
 
 app = gr.mount_gradio_app(app, gradio_demo, path="/")
 
