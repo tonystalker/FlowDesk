@@ -15,6 +15,7 @@ import uuid
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
+import gradio as gr
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 from sqlalchemy import create_engine
@@ -227,3 +228,13 @@ async def submit_feedback(req: FeedbackRequest) -> FeedbackResponse:
 async def health() -> dict[str, str]:
     """Health check endpoint for Cloud Run and load balancers."""
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Mount Gradio demo at root — accessible at Service URL /
+# ---------------------------------------------------------------------------
+
+from gateway.demo import demo as gradio_demo
+
+app = gr.mount_gradio_app(app, gradio_demo, path="/")
+
