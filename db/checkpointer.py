@@ -1,0 +1,39 @@
+"""Checkpointer factory for LangGraph state persistence.
+
+Abstracts away the database adapter selection (PostgreSQL vs SQLite) from the
+core graph definition, adhering to Dependency Inversion.
+"""
+
+import logging
+import sqlite3
+
+import config
+
+logger = logging.getLogger(__name__)
+
+def get_checkpointer():
+    """Auto-detect DATABASE_URL to choose PostgresSaver vs SqliteSaver.
+    
+    Uses PostgreSQL in production and gracefully falls back to SQLite for
+    local development if PostgreSQL is unavailable or unconfigured.
+    """
+    db_url = config.settings.database_url
+
+    if db_url.startswith("postgresql"):
+        try:
+            from langgraph.checkpoint.postgres import PostgresSaver
+
+            logger.info("Using PostgreSQL checkpointer: %s", db_url[:30] + "...")
+            return PostgresSaver.from_conn_string(db_url)
+        except Exception as e:
+            logger.warning(
+                "Failed to initialize PostgreSQL checkpointer (%s), falling back to SQLite.",
+                e,
+            )
+
+    # Fallback: SQLite for local dev
+    from langgraph.checkpoint.sqlite import SqliteSaver
+
+    conn = sqlite3.connect("support_platform_checkpoints.db", check_same_thread=False)
+    logger.info("Using SQLite checkpointer (local dev)")
+    return SqliteSaver(conn)

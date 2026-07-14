@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import logging
 import pickle
-import re
 from pathlib import Path
 from typing import TypedDict
+
+from retrieval.utils import tokenize
 
 logger = logging.getLogger(__name__)
 
@@ -29,15 +30,6 @@ class RetrievalResult(TypedDict):
     source: str
     score: float
     method: str  # "dense", "sparse", or "hybrid"
-
-
-# ---------------------------------------------------------------------------
-# Tokeniser (shared with ingest.py)
-# ---------------------------------------------------------------------------
-
-def _tokenize(text: str) -> list[str]:
-    """Simple whitespace + lowercasing tokenizer matching ingest._tokenize."""
-    return re.sub(r"[^\w\s]", "", text.lower()).split()
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +104,7 @@ def sparse_search(
     chunk_sources: list[str] = payload["chunk_sources"]
     chunk_doc_ids: list[str] = payload["chunk_doc_ids"]
 
-    query_tokens = _tokenize(query)
+    query_tokens = tokenize(query)
     scores = bm25.get_scores(query_tokens)
 
     # Pair scores with indices and sort descending.

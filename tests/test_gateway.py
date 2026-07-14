@@ -58,24 +58,13 @@ def test_chat_endpoint_missing_body():
 
 
 @pytest.fixture
-def mock_feedback_db(mocker):
-    """Mock the DB session for feedback tests."""
-    mock_session_factory = mocker.MagicMock()
-    mock_db = mocker.MagicMock()
-    mock_session_factory.return_value.__enter__ = mocker.MagicMock(return_value=mock_db)
-    mock_session_factory.return_value.__exit__ = mocker.MagicMock(return_value=False)
-
-    mocker.patch("gateway.main._get_db", return_value=mock_session_factory)
-
-    # Mock the feedback object returned after commit + refresh
-    mock_feedback = mocker.MagicMock()
-    mock_feedback.id = uuid.uuid4()
-    mock_db.refresh = mocker.MagicMock(side_effect=lambda obj: setattr(obj, "id", mock_feedback.id))
-
-    return mock_db
+def mock_log_feedback(mocker):
+    """Mock log_feedback for feedback tests."""
+    mock_log = mocker.patch("gateway.main.log_feedback", return_value=str(uuid.uuid4()))
+    return mock_log
 
 
-def test_feedback_thumbs_up(mock_feedback_db):
+def test_feedback_thumbs_up(mock_log_feedback):
     payload = {
         "message_content": "How do I reset my password?",
         "response_content": "Go to Settings > Security > Change Password.",
@@ -89,7 +78,7 @@ def test_feedback_thumbs_up(mock_feedback_db):
     assert "feedback_id" in data
 
 
-def test_feedback_thumbs_down(mock_feedback_db):
+def test_feedback_thumbs_down(mock_log_feedback):
     payload = {
         "message_content": "What is my order status?",
         "response_content": "I am the action agent.",

@@ -15,19 +15,12 @@ import uuid
 
 import gradio as gr
 from langchain_core.messages import HumanMessage
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-import config
-from db.models import Feedback
+from db.session import log_feedback
 from orchestrator.graph import compiled_graph
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# DB session for feedback logging
-engine = create_engine(config.settings.database_url)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def chat_fn(message: str, history: list) -> str:
@@ -75,19 +68,7 @@ def vote_fn(data: gr.LikeData) -> None:
     rating = "up" if data.liked else "down"
     response_content = data.value if isinstance(data.value, str) else str(data.value)
 
-    try:
-        with SessionLocal() as db:
-            feedback = Feedback(
-                conversation_id=None,
-                message_content="",
-                response_content=response_content,
-                rating=rating,
-            )
-            db.add(feedback)
-            db.commit()
-            logger.info("Feedback recorded: rating=%s", rating)
-    except Exception as e:
-        logger.error("Failed to record feedback: %s", e)
+    log_feedback(rating=rating, response_content=response_content)
 
 
 with gr.Blocks() as demo:

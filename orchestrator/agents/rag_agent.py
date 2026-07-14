@@ -6,25 +6,11 @@ from orchestrator.models import RAGResponse
 from retrieval.hybrid_retriever import hybrid_search
 from retrieval.reranker import rerank
 from evaluation.confidence_scorer import compute_unified_confidence
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
+from db.session import log_telemetry
 import config
 import logging
-from db.models import Message, RetrievalLog, ConfidenceScore
 
 logger = logging.getLogger(__name__)
-
-# Lazy DB engine — created on first use to avoid crashing at import time
-_engine = None
-_SessionLocal = None
-
-def _get_db():
-    """Return a thread-safe session factory, creating the engine on first call."""
-    global _engine, _SessionLocal
-    if _SessionLocal is None:
-        _engine = create_engine(config.settings.database_url)
-        _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
-    return _SessionLocal
 
 def rag_agent_node(state: SupportState) -> SupportState:
     """
@@ -106,34 +92,16 @@ def rag_agent_node(state: SupportState) -> SupportState:
         retrieved_context=retrieved_context
     )
     
-    # Optional: Log telemetry asynchronously in production. Here we log synchronously.
-    try:
-        with _get_db()() as db:
-            # We would normally link to an actual conversation_id, but here we just create a log entry
-            log_msg = Message(role="ai", content=answer)
-            db.add(log_msg)
-            db.flush()
-            
-            retrieval_log = RetrievalLog(
-                message_id=log_msg.id,
-                query=query,
-                retrieved_chunks=[doc["text"] for doc in reranked] if reranked else [],
-                rerank_scores=[doc["score"] for doc in reranked] if reranked else []
-            )
-            
-            conf_score = ConfidenceScore(
-                message_id=log_msg.id,
-                retrieval_score=max_retrieval_score,
-                llm_confidence=llm_confidence,
-                groundedness=final_confidence, # Rough proxy for now
-                final_score=final_confidence
-            )
-            
-            db.add(retrieval_log)
-            db.add(conf_score)
-            db.commit()
-    except Exception as e:
-        logger.error(f"Failed to log telemetry: {e}")
+    # Log telemetry asynchronously in production. Here we log synchronously using central session.
+    log_telemetry(
+        answer=answer,
+        query=query,
+        llm_confidence=llm_confidence,
+        retrieval_score=max_retrieval_score,
+        final_confidence=final_confidence,
+        retrieved_chunks=[doc["text"] for doc in reranked] if reranked else [],
+        rerank_scores=[doc["score"] for doc in reranked] if reranked else []
+    )
         
     # Append the AI's response to the messages
     return {

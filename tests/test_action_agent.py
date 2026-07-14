@@ -17,21 +17,13 @@ from orchestrator.models import ActionResponse
 from orchestrator.state import SupportState
 
 
-def _mock_get_db():
-    """Helper: return a mock _get_db that yields a mock session."""
-    mock_db = MagicMock()
-    mock_session_factory = MagicMock()
-    mock_session_factory.return_value.__enter__ = MagicMock(return_value=mock_db)
-    mock_session_factory.return_value.__exit__ = MagicMock(return_value=False)
-    return mock_session_factory, mock_db
 
 
-@patch("orchestrator.agents.action_agent._get_db")
+
+@patch("orchestrator.agents.action_agent.log_telemetry")
 @patch("orchestrator.agents.action_agent.ChatGroq")
-def test_action_agent_password_reset(mock_chat_groq, mock_get_db):
+def test_action_agent_password_reset(mock_chat_groq, mock_log_telemetry):
     """Action agent returns a structured response for password reset queries."""
-    mock_session_factory, mock_db = _mock_get_db()
-    mock_get_db.return_value = mock_session_factory
 
     mock_llm = MagicMock()
     mock_structured = MagicMock()
@@ -58,12 +50,10 @@ def test_action_agent_password_reset(mock_chat_groq, mock_get_db):
     assert result["confidence"] == 0.95
 
 
-@patch("orchestrator.agents.action_agent._get_db")
+@patch("orchestrator.agents.action_agent.log_telemetry")
 @patch("orchestrator.agents.action_agent.ChatGroq")
-def test_action_agent_refund(mock_chat_groq, mock_get_db):
+def test_action_agent_refund(mock_chat_groq, mock_log_telemetry):
     """Action agent handles refund requests with confidence scoring."""
-    mock_session_factory, mock_db = _mock_get_db()
-    mock_get_db.return_value = mock_session_factory
 
     mock_llm = MagicMock()
     mock_structured = MagicMock()
@@ -89,12 +79,10 @@ def test_action_agent_refund(mock_chat_groq, mock_get_db):
     assert "refund" in result["messages"][0].content.lower()
 
 
-@patch("orchestrator.agents.action_agent._get_db")
+@patch("orchestrator.agents.action_agent.log_telemetry")
 @patch("orchestrator.agents.action_agent.ChatGroq")
-def test_action_agent_llm_failure_graceful(mock_chat_groq, mock_get_db):
+def test_action_agent_llm_failure_graceful(mock_chat_groq, mock_log_telemetry):
     """Action agent handles LLM failures gracefully with a fallback message."""
-    mock_session_factory, mock_db = _mock_get_db()
-    mock_get_db.return_value = mock_session_factory
 
     mock_llm = MagicMock()
     mock_structured = MagicMock()
@@ -117,9 +105,9 @@ def test_action_agent_llm_failure_graceful(mock_chat_groq, mock_get_db):
     assert "support@flowdesk.com" in result["messages"][0].content
 
 
-@patch("orchestrator.agents.action_agent._get_db")
+@patch("orchestrator.agents.action_agent.log_telemetry")
 @patch("orchestrator.agents.action_agent.ChatGroq")
-def test_action_agent_empty_messages(mock_chat_groq, mock_get_db):
+def test_action_agent_empty_messages(mock_chat_groq, mock_log_telemetry):
     """Action agent returns current state when messages are empty."""
     state: SupportState = {
         "messages": [],

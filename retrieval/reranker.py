@@ -14,22 +14,21 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from retrieval.hybrid_retriever import RetrievalResult
 
+from functools import cache
+
 logger = logging.getLogger(__name__)
 
-# Module-level singleton so the model is loaded once per process.
-_model: Any = None
 _MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 
-def _get_model() -> Any:
+@cache
+def get_model() -> Any:
     """Lazy-load the cross-encoder model (import + download deferred to first call)."""
-    global _model
-    if _model is None:
-        logger.info("Loading cross-encoder model: %s", _MODEL_NAME)
-        from sentence_transformers import CrossEncoder  # deferred — avoids startup cost
-        _model = CrossEncoder(_MODEL_NAME)
-        logger.info("Cross-encoder model loaded")
-    return _model
+    logger.info("Loading cross-encoder model: %s", _MODEL_NAME)
+    from sentence_transformers import CrossEncoder  # deferred — avoids startup cost
+    model = CrossEncoder(_MODEL_NAME)
+    logger.info("Cross-encoder model loaded")
+    return model
 
 
 def rerank(
@@ -60,7 +59,7 @@ def rerank(
     if not candidates:
         return []
 
-    model = _get_model()
+    model = get_model()
 
     # Build (query, candidate_text) pairs for scoring.
     pairs = [(query, c["text"]) for c in candidates]

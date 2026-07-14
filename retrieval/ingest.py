@@ -13,12 +13,13 @@ from __future__ import annotations
 import hashlib
 import logging
 import pickle
-import re
 from pathlib import Path
 from typing import TypedDict
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from rank_bm25 import BM25Okapi
+
+from retrieval.utils import tokenize
 
 logger = logging.getLogger(__name__)
 
@@ -186,10 +187,6 @@ def upsert_to_pinecone(
 # BM25 index
 # ---------------------------------------------------------------------------
 
-def _tokenize(text: str) -> list[str]:
-    """Simple whitespace + lowercasing tokenizer for BM25."""
-    return re.sub(r"[^\w\s]", "", text.lower()).split()
-
 
 def build_bm25_index(
     chunks: list[Chunk],
@@ -200,7 +197,7 @@ def build_bm25_index(
     The pickle file stores ``(bm25_model, chunk_ids, chunk_texts)`` so the
     retriever can map scores back to chunk identifiers.
     """
-    corpus = [_tokenize(c["text"]) for c in chunks]
+    corpus = [tokenize(c["text"]) for c in chunks]
     bm25 = BM25Okapi(corpus)
 
     payload = {

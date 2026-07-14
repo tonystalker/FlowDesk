@@ -18,23 +18,17 @@ from fastapi.responses import StreamingResponse
 import gradio as gr
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from typing import Optional
 
-import config
-from db.models import Feedback
+from functools import cache
 
-# Lazy-load the compiled graph to avoid crash at container startup
-# (heavy imports like sentence-transformers / API key validation happen here)
-_compiled_graph = None
+from db.session import log_feedback
 
+@cache
 def get_graph():
-    global _compiled_graph
-    if _compiled_graph is None:
-        from orchestrator.graph import compiled_graph as _g
-        _compiled_graph = _g
-    return _compiled_graph
+    """Lazy-load the compiled graph to avoid crash at container startup."""
+    from orchestrator.graph import compiled_graph
+    return compiled_graph
 
 logger = logging.getLogger(__name__)
 
@@ -43,19 +37,6 @@ app = FastAPI(
     description="LLMOps-driven Customer Support Gateway",
     version="1.0.0",
 )
-
-# Lazy DB session for feedback logging (skill.md §6)
-_engine = None
-_SessionLocal = None
-
-def _get_db():
-    """Return a session factory, creating the DB engine on first call."""
-    global _engine, _SessionLocal
-    if _SessionLocal is None:
-        _engine = create_engine(config.settings.database_url)
-        _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
-    return _SessionLocal
-
 
 # ---------------------------------------------------------------------------
 # Request / Response models
@@ -198,25 +179,19 @@ async def submit_feedback(req: FeedbackRequest) -> FeedbackResponse:
     if req.rating not in ("up", "down"):
         raise HTTPException(status_code=400, detail="rating must be 'up' or 'down'")
 
-    try:
-        with _get_db()() as db:
-            feedback = Feedback(
-                conversation_id=req.conversation_id,
-                message_content=req.message_content,
-                response_content=req.response_content,
-                rating=req.rating,
-            )
-            db.add(feedback)
-            db.commit()
-            db.refresh(feedback)
-
-            return FeedbackResponse(
-                status="recorded",
-                feedback_id=str(feedback.id),
-            )
-    except Exception as e:
-        logger.error("Failed to record feedback: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+    feedback_id = log_feedback(
+        rating=req.rating,
+        response_content=req.response_content,
+        message_content=req.message_content,
+        conversation_id=req.conversation_id,
+    )
+    if feedback_id:
+        return FeedbackResponse(
+            status="recorded",
+            feedback_id=feedback_id,
+        )
+    else:
+        raise HTTPException(status_code=500, detail="Failed to record feedback")
 
 
 # ---------------------------------------------------------------------------

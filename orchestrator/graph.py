@@ -13,11 +13,10 @@ Checkpointer (build_guide §2.2): PostgreSQL in prod, SQLite for local dev.
 from __future__ import annotations
 
 import logging
-import sqlite3
 
 from langgraph.graph import END, StateGraph
 
-import config
+from db.checkpointer import get_checkpointer
 from orchestrator.agents.action_agent import action_agent_node
 from orchestrator.agents.escalation_agent import escalation_agent_node
 from orchestrator.agents.rag_agent import rag_agent_node
@@ -76,32 +75,7 @@ graph.set_entry_point("router")
 # Checkpointer: PostgreSQL in prod, SQLite for local dev (build_guide §2.2)
 # ---------------------------------------------------------------------------
 
-
-def _build_checkpointer():
-    """Auto-detect DATABASE_URL to choose PostgresSaver vs SqliteSaver."""
-    db_url = config.settings.database_url
-
-    if db_url.startswith("postgresql"):
-        try:
-            from langgraph.checkpoint.postgres import PostgresSaver
-
-            logger.info("Using PostgreSQL checkpointer: %s", db_url[:30] + "...")
-            return PostgresSaver.from_conn_string(db_url)
-        except Exception as e:
-            logger.warning(
-                "Failed to initialize PostgreSQL checkpointer (%s), falling back to SQLite.",
-                e,
-            )
-
-    # Fallback: SQLite for local dev
-    from langgraph.checkpoint.sqlite import SqliteSaver
-
-    conn = sqlite3.connect("support_platform_checkpoints.db", check_same_thread=False)
-    logger.info("Using SQLite checkpointer (local dev)")
-    return SqliteSaver(conn)
-
-
-memory = _build_checkpointer()
+memory = get_checkpointer()
 
 # Compile
 compiled_graph = graph.compile(checkpointer=memory)

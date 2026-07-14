@@ -15,10 +15,10 @@ from rank_bm25 import BM25Okapi
 from retrieval.hybrid_retriever import (
     RetrievalResult,
     _normalize_scores,
-    _tokenize,
     merge_and_dedupe,
     sparse_search,
 )
+from retrieval.utils import tokenize
 
 
 # ---------------------------------------------------------------------------
@@ -35,7 +35,7 @@ def bm25_index_path(tmp_path: Path) -> Path:
         "return refund policy 30 days money back",
         "two factor authentication 2FA security setup",
     ]
-    tokenized = [_tokenize(t) for t in texts]
+    tokenized = [tokenize(t) for t in texts]
     bm25 = BM25Okapi(tokenized)
 
     payload = {
@@ -57,13 +57,13 @@ def bm25_index_path(tmp_path: Path) -> Path:
 
 class TestTokenize:
     def test_lowercases(self) -> None:
-        assert _tokenize("Hello World") == ["hello", "world"]
+        assert tokenize("Hello World") == ["hello", "world"]
 
     def test_strips_punctuation(self) -> None:
-        assert _tokenize("hello, world!") == ["hello", "world"]
+        assert tokenize("hello, world!") == ["hello", "world"]
 
     def test_empty_string(self) -> None:
-        assert _tokenize("") == []
+        assert tokenize("") == []
 
 
 # ---------------------------------------------------------------------------
