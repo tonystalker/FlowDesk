@@ -11,12 +11,12 @@ def test_health_check():
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
-# We'll mock get_graph() to avoid live LLM calls during the gateway test
+# We'll mock the compiled graph on app.state to avoid live LLM calls
 @pytest.fixture
-def mock_graph(mocker):
-    # Mock the get_graph function to return a mock graph object
-    mock_g = mocker.MagicMock()
-    mocker.patch("gateway.main.get_graph", return_value=mock_g)
+def mock_graph():
+    # Assign the mock graph directly to app.state
+    mock_g = AsyncMock()
+    app.state.compiled_graph = mock_g
     return mock_g
 
 @pytest.mark.asyncio
