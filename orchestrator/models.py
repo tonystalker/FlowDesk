@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 
 class IntentClassification(BaseModel):
     intent: str = Field(
-        description="The intent of the user's query. Must be one of: 'faq', 'action', or 'complex'."
+        description="The intent of the user's query. Must be one of: 'faq', 'action', 'complex', or 'out_of_scope'."
     )
 
 class RAGResponse(BaseModel):

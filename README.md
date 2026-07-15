@@ -55,8 +55,8 @@ User Query
 - **Reranking**: Sentence Transformers (`cross-encoder/ms-marco-MiniLM-L-6-v2`)
 - **Database**: PostgreSQL (Supabase) / SQLite (Local Dev)
 - **API**: FastAPI + Uvicorn + Server-Sent Events (SSE) Streaming
-- **UI**: Gradio
-- **CI/CD**: GitHub Actions → Google Cloud Run
+- **UI**: Next.js (App Router) Demo Frontend + Tailwind CSS
+- **CI/CD**: GitHub Actions → Google Cloud Run (Backend) & Vercel (Frontend)
 
 ---
 
@@ -65,19 +65,31 @@ User Query
 ### Prerequisites
 - Python 3.11+
 - [uv](https://docs.astral.sh/uv/) package manager
+- Node.js 18+ (for the frontend)
 
 ### 1. Clone & Install
+**Backend:**
 ```bash
 git clone https://github.com/tonystalker/FlowDesk.git
 cd FlowDesk
 uv sync
 ```
 
+**Frontend:**
+```bash
+cd flowdesk-demo
+npm install
+```
+
 ### 2. Configure Environment
 ```bash
+# Backend (.env)
 cp .env.example .env
 # Edit .env with your API keys:
 #   GEMINI_API_KEY, GROQ_API_KEY, PINECONE_API_KEY, PINECONE_ENV, DATABASE_URL
+
+# Frontend (flowdesk-demo/.env.local)
+echo "BACKEND_URL=http://127.0.0.1:8000" > flowdesk-demo/.env.local
 ```
 
 ### 3. Run Database Migrations
@@ -90,17 +102,18 @@ uv run alembic upgrade head
 uv run python -m retrieval.ingest
 ```
 
-### 5. Launch the API & UI
-**Start the REST API:**
+### 5. Launch the App
+**Start the REST API (Backend):**
 ```bash
 uv run uvicorn gateway.main:app --reload
 # Available at http://localhost:8000
 ```
 
-**Start the Interactive Chat UI:**
+**Start the Next.js UI (Frontend):**
 ```bash
-uv run python -m gateway.demo
-# Opens at http://127.0.0.1:7860
+cd flowdesk-demo
+npm run dev
+# Opens at http://localhost:3000
 ```
 
 ---

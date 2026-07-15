@@ -13,6 +13,7 @@ import json
 import logging
 import uuid
 
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -24,6 +25,7 @@ from typing import Optional
 from db.session import log_feedback
 from db.checkpointer import get_checkpointer
 from orchestrator.graph import graph
+from gateway.streaming import generate_sse_stream
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -57,6 +59,11 @@ class ChatResponse(BaseModel):
     retry_count: int = 0
 
 
+class DemoChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+
+
 class FeedbackRequest(BaseModel):
     conversation_id: Optional[str] = None
     message_content: str
@@ -87,7 +94,11 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
         thread_config = {"configurable": {"thread_id": req.conversation_id}}
 
         initial_state = {"messages": [HumanMessage(content=req.message)]}
-        result = await request.app.state.compiled_graph.ainvoke(initial_state, config=thread_config)
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: request.app.state.compiled_graph.invoke(initial_state, config=thread_config)
+        )
 
         ai_message = (
             result["messages"][-1].content
@@ -109,59 +120,25 @@ async def chat(req: ChatRequest, request: Request) -> ChatResponse:
 
 
 # ---------------------------------------------------------------------------
-# POST /chat/stream — SSE streaming (stretch goal)
+# POST /api/chat — SSE streaming for Next.js Demo Frontend
 # ---------------------------------------------------------------------------
 
-
-@app.post("/chat/stream")
-async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
-    """Stream the orchestrator response via Server-Sent Events (SSE).
-
-    Each event contains a JSON payload with the token or final metadata.
+@app.post("/api/chat")
+async def api_chat_stream(req: DemoChatRequest, request: Request) -> StreamingResponse:
+    """Stream the orchestrator response for the demo frontend.
+    
+    NOTE: Simulated Streaming (Option A).
+    Because Groq + Cohere reranking is so fast (<1s TTFT), we fetch the full
+    response synchronously and simulate the stream by chunking the text. This
+    guarantees metadata integrity without risking complex on-the-fly JSON parsing
+    from partial tool-call streams.
     """
-    if not req.conversation_id:
-        req.conversation_id = str(uuid.uuid4())
-
-    thread_config = {"configurable": {"thread_id": req.conversation_id}}
+    conversation_id = req.session_id if req.session_id else str(uuid.uuid4())
+    thread_config = {"configurable": {"thread_id": conversation_id}}
     initial_state = {"messages": [HumanMessage(content=req.message)]}
-
-    async def event_generator():
-        try:
-            # Stream graph events as SSE
-            async for event in request.app.state.compiled_graph.astream_events(
-                initial_state, config=thread_config, version="v2"
-            ):
-                kind = event.get("event", "")
-
-                # Stream LLM tokens as they arrive
-                if kind == "on_chat_model_stream":
-                    chunk = event.get("data", {}).get("chunk")
-                    if chunk and hasattr(chunk, "content") and chunk.content:
-                        payload = json.dumps({"type": "token", "content": chunk.content})
-                        yield f"data: {payload}\n\n"
-
-                # Send final state when graph completes
-                elif kind == "on_chain_end" and event.get("name") == "LangGraph":
-                    output = event.get("data", {}).get("output", {})
-                    final_msg = ""
-                    if output.get("messages"):
-                        final_msg = output["messages"][-1].content
-
-                    payload = json.dumps({
-                        "type": "done",
-                        "response": final_msg,
-                        "confidence": output.get("confidence", 0.0),
-                        "intent": output.get("intent", "unknown"),
-                        "retry_count": output.get("retry_count", 0),
-                    })
-                    yield f"data: {payload}\n\n"
-
-        except Exception as e:
-            payload = json.dumps({"type": "error", "detail": str(e)})
-            yield f"data: {payload}\n\n"
-
+    
     return StreamingResponse(
-        event_generator(),
+        generate_sse_stream(request.app.state.compiled_graph, initial_state, thread_config),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

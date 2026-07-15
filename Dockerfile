@@ -9,8 +9,6 @@ RUN pip install uv
 COPY pyproject.toml uv.lock ./
 
 # Install dependencies (frozen, no dev tools)
-# CPU-only torch is resolved directly via [tool.uv.sources] in pyproject.toml,
-# so no CUDA wheels are ever downloaded — no force-reinstall/uninstall needed.
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 

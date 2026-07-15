@@ -23,8 +23,9 @@ def mock_graph():
 async def test_chat_endpoint_success(mock_graph):
     from langchain_core.messages import AIMessage
     
-    # ainvoke is async — must use AsyncMock so `await` works
-    mock_graph.ainvoke = AsyncMock(return_value={
+    from unittest.mock import MagicMock
+    # invoke is synchronous now
+    mock_graph.invoke = MagicMock(return_value={
         "messages": [AIMessage(content="Hello from mock!")],
         "confidence": 0.95,
         "intent": "faq",

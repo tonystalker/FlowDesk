@@ -23,6 +23,7 @@ def route_intent(state: SupportState) -> SupportState:
     - 'faq': The user is asking a general question about policies, troubleshooting, or knowledge base info.
     - 'action': The user wants to perform a specific action like checking order status, getting a refund, or managing their account.
     - 'complex': The user is frustrated, angry, or has a complex issue that requires human intervention.
+    - 'out_of_scope': The user is asking for something completely unrelated to customer support (e.g., writing code, general knowledge questions, jokes).
     
     User query: {query}
     """
@@ -31,7 +32,7 @@ def route_intent(state: SupportState) -> SupportState:
     intent = response.intent if response and hasattr(response, "intent") else "faq"
     
     # Ensure intent is valid
-    if intent not in ["faq", "action", "complex"]:
+    if intent not in ["faq", "action", "complex", "out_of_scope"]:
         intent = "faq"
         
     return {"intent": intent}

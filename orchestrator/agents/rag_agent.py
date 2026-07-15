@@ -12,41 +12,21 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def rag_agent_node(state: SupportState) -> SupportState:
-    """
-    RAG agent node:
-    1. Hybrid search + reranking
-    2. Model selection (Groq for short/initial, Gemini for long/retry)
-    3. Generate answer based ONLY on retrieved context
-    4. Provide a confidence score
-    """
-    messages = state.get("messages", [])
-    if not messages:
-        return state
-        
-    last_message = messages[-1]
-    query = last_message.content if hasattr(last_message, "content") else str(last_message)
-    
-    # 1. Retrieval
-    # If we are retrying, we might already have retrieved_context, but let's re-retrieve or just use it.
-    # The build guide didn't specify caching the context explicitly between retries, but it's in the state.
-    retrieved_context = state.get("retrieved_context", [])
-    retry_count = state.get("retry_count", 0)
-    
-    # If retrying, increase search scope to cast a wider net
+def _perform_retrieval(query: str, retry_count: int) -> tuple[list[str], list[dict], list[float]]:
+    """Perform hybrid search and reranking."""
     search_top_k = config.settings.retrieval_top_k * 2 if retry_count > 0 else config.settings.retrieval_top_k
+    candidates = hybrid_search(query, top_k=search_top_k)
+    reranked = rerank(query, candidates, top_n=config.settings.rerank_top_n)
     
-    if not retrieved_context or retry_count > 0:
-        candidates = hybrid_search(query, top_k=search_top_k)
-        reranked = rerank(query, candidates, top_n=config.settings.rerank_top_n)
-        retrieved_context = [doc["text"] for doc in reranked]
-        
-    context_str = "\n\n".join(retrieved_context)
+    retrieved_context = [doc["text"] for doc in reranked]
+    retrieved_chunks = [{"source": doc.get("source", ""), "score": float(doc.get("score", 0.0))} for doc in reranked]
+    rerank_scores = [doc["score"] for doc in reranked]
     
-    # 2. Model Routing
-    # Short/simple queries (< 50 tokens roughly 200 chars) AND no retries -> Groq
+    return retrieved_context, retrieved_chunks, rerank_scores
+
+def _generate_answer(query: str, context_str: str, retry_count: int, is_multi_turn: bool) -> tuple[str, float]:
+    """Route to appropriate LLM and generate answer based on context."""
     is_short = len(query) < 200
-    is_multi_turn = len(messages) > 1
     
     if is_short and not is_multi_turn and retry_count == 0:
         logger.info("Using Groq for RAG (short query, single turn)")
@@ -82,8 +62,40 @@ def rag_agent_node(state: SupportState) -> SupportState:
         answer = "I'm sorry, I couldn't generate a response."
         llm_confidence = 0.0
         
-    # We estimate retrieval score as the max rerank score, or 0.5 if not available
-    max_retrieval_score = reranked[0]["score"] if reranked else 0.5
+    return answer, llm_confidence
+
+def rag_agent_node(state: SupportState) -> SupportState:
+    """
+    RAG agent node:
+    1. Hybrid search + reranking
+    2. Model selection (Groq for short/initial, Gemini for long/retry)
+    3. Generate answer based ONLY on retrieved context
+    4. Provide a confidence score
+    """
+    messages = state.get("messages", [])
+    if not messages:
+        return state
+        
+    last_message = messages[-1]
+    query = last_message.content if hasattr(last_message, "content") else str(last_message)
+    
+    retrieved_context = state.get("retrieved_context", [])
+    retrieved_chunks = state.get("retrieved_chunks", [])
+    retry_count = state.get("retry_count", 0)
+    
+    # 1. Retrieval
+    rerank_scores = []
+    if not retrieved_context or retry_count > 0:
+        retrieved_context, retrieved_chunks, rerank_scores = _perform_retrieval(query, retry_count)
+        
+    context_str = "\n\n".join(retrieved_context)
+    
+    # 2. Model Routing & Generation
+    is_multi_turn = len(messages) > 1
+    answer, llm_confidence = _generate_answer(query, context_str, retry_count, is_multi_turn)
+        
+    # 3. Confidence Scoring
+    max_retrieval_score = rerank_scores[0] if rerank_scores else 0.5
     
     final_confidence = compute_unified_confidence(
         retrieval_score=max_retrieval_score,
@@ -92,21 +104,21 @@ def rag_agent_node(state: SupportState) -> SupportState:
         retrieved_context=retrieved_context
     )
     
-    # Log telemetry asynchronously in production. Here we log synchronously using central session.
+    # 4. Telemetry
     log_telemetry(
         answer=answer,
         query=query,
         llm_confidence=llm_confidence,
         retrieval_score=max_retrieval_score,
         final_confidence=final_confidence,
-        retrieved_chunks=[doc["text"] for doc in reranked] if reranked else [],
-        rerank_scores=[doc["score"] for doc in reranked] if reranked else []
+        retrieved_chunks=retrieved_context,
+        rerank_scores=rerank_scores
     )
         
-    # Append the AI's response to the messages
     return {
         "messages": [AIMessage(content=answer)],
         "retrieved_context": retrieved_context,
+        "retrieved_chunks": retrieved_chunks,
         "confidence": final_confidence,
         "retry_count": retry_count + 1
     }
