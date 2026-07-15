@@ -17,10 +17,19 @@ import gradio as gr
 from langchain_core.messages import HumanMessage
 
 from db.session import log_feedback
-from orchestrator.graph import compiled_graph
+from db.checkpointer import get_checkpointer
+from orchestrator.graph import graph
+import contextlib
+import atexit
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Keep checkpointer context open globally for Gradio demo
+stack = contextlib.ExitStack()
+memory = stack.enter_context(get_checkpointer())
+compiled_graph = graph.compile(checkpointer=memory)
+atexit.register(stack.close)
 
 
 def chat_fn(message: str, history: list) -> str:

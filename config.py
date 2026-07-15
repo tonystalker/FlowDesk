@@ -30,7 +30,7 @@ class Settings(BaseModel):
     pinecone_index_name: str = os.getenv("PINECONE_INDEX_NAME") or "support-docs"
 
     # --- Database ---
-    database_url: str = os.getenv("DATABASE_URL") or "sqlite:///./support_platform.db"
+    database_url: str = (os.getenv("DATABASE_URL") or "sqlite:///./support_platform.db").strip()
 
     # --- Embedding ---
     embedding_model: str = os.getenv("EMBEDDING_MODEL") or "models/gemini-embedding-2"

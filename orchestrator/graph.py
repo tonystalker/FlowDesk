@@ -74,8 +74,5 @@ graph.set_entry_point("router")
 # ---------------------------------------------------------------------------
 # Checkpointer: PostgreSQL in prod, SQLite for local dev (build_guide §2.2)
 # ---------------------------------------------------------------------------
-
-memory = get_checkpointer()
-
-# Compile
-compiled_graph = graph.compile(checkpointer=memory)
+# Note: Graph compilation with checkpointer is deferred to entrypoints 
+# to avoid forcing DB connections at module import time.

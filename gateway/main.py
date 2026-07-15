@@ -13,22 +13,23 @@ import json
 import logging
 import uuid
 
-from fastapi import FastAPI, HTTPException
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 import gradio as gr
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 from typing import Optional
 
-from functools import cache
-
 from db.session import log_feedback
+from db.checkpointer import get_checkpointer
+from orchestrator.graph import graph
 
-@cache
-def get_graph():
-    """Lazy-load the compiled graph to avoid crash at container startup."""
-    from orchestrator.graph import compiled_graph
-    return compiled_graph
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    with get_checkpointer() as memory:
+        app.state.compiled_graph = graph.compile(checkpointer=memory)
+        yield
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ app = FastAPI(
     title="FlowDesk Support API",
     description="LLMOps-driven Customer Support Gateway",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # ---------------------------------------------------------------------------
@@ -73,7 +75,7 @@ class FeedbackResponse(BaseModel):
 
 
 @app.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest) -> ChatResponse:
+async def chat(req: ChatRequest, request: Request) -> ChatResponse:
     """Submit a message to the support orchestrator and receive an intelligent response.
 
     Maintains conversation state across requests using the provided conversation_id.
@@ -85,7 +87,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
         thread_config = {"configurable": {"thread_id": req.conversation_id}}
 
         initial_state = {"messages": [HumanMessage(content=req.message)]}
-        result = await get_graph().ainvoke(initial_state, config=thread_config)
+        result = await request.app.state.compiled_graph.ainvoke(initial_state, config=thread_config)
 
         ai_message = (
             result["messages"][-1].content
@@ -112,7 +114,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
 
 @app.post("/chat/stream")
-async def chat_stream(req: ChatRequest) -> StreamingResponse:
+async def chat_stream(req: ChatRequest, request: Request) -> StreamingResponse:
     """Stream the orchestrator response via Server-Sent Events (SSE).
 
     Each event contains a JSON payload with the token or final metadata.
@@ -126,7 +128,7 @@ async def chat_stream(req: ChatRequest) -> StreamingResponse:
     async def event_generator():
         try:
             # Stream graph events as SSE
-            async for event in get_graph().astream_events(
+            async for event in request.app.state.compiled_graph.astream_events(
                 initial_state, config=thread_config, version="v2"
             ):
                 kind = event.get("event", "")

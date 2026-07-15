@@ -23,7 +23,8 @@ if config_alembic.config_file_name is not None:
 target_metadata = Base.metadata
 
 # Set the DB URL from our config, rather than hardcoding in alembic.ini
-config_alembic.set_main_option("sqlalchemy.url", config.settings.database_url)
+db_url = config.settings.database_url.replace("%", "%%")
+config_alembic.set_main_option("sqlalchemy.url", db_url)
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
