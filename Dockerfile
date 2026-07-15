@@ -29,11 +29,14 @@ COPY . .
 # Ensure the virtualenv is used by default
 ENV PATH="/app/.venv/bin:$PATH"
 
+# Tell HuggingFace to cache models inside the image (not in a volatile cache mount).
+ENV HF_HOME="/app/.hf_cache"
+
 # Pre-bake the cross-encoder model at build time so it is available in the
 # image and does NOT need to be downloaded at container startup (which would
 # exceed Cloud Run's startup timeout).
-RUN --mount=type=cache,target=/root/.cache/huggingface \
-    python -c "\
+# NOTE: No --mount=type=cache here — we WANT the files in the image layer.
+RUN python -c "\
 from sentence_transformers import CrossEncoder; \
 print('Pre-loading cross-encoder model...'); \
 CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2'); \
