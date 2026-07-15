@@ -9,7 +9,7 @@ Cohere's rerank-v3.5 API and returns the top-n.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from retrieval.hybrid_retriever import RetrievalResult
