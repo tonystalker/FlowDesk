@@ -20,6 +20,7 @@ class Settings(BaseModel):
     """Application-wide settings. All values sourced from environment."""
 
     # --- API keys (never committed) ---
+    cohere_api_key: str = os.getenv("COHERE_API_KEY") or ""
     gemini_api_key: str = os.getenv("GEMINI_API_KEY") or ""
     groq_api_key: str = os.getenv("GROQ_API_KEY") or ""
     pinecone_api_key: str = os.getenv("PINECONE_API_KEY") or ""
