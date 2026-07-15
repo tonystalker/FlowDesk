@@ -178,6 +178,10 @@ def upsert_to_pinecone(
             start + len(batch),
             len(vectors),
         )
+        if start + batch_size < len(chunks):
+            import time
+            logger.info("Sleeping for 40 seconds to respect Gemini API rate limits...")
+            time.sleep(40)
 
     logger.info("Total vectors upserted: %d", total_upserted)
     return total_upserted
