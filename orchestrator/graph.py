@@ -16,7 +16,7 @@ import logging
 
 from langgraph.graph import END, StateGraph
 
-from db.checkpointer import get_checkpointer
+
 from orchestrator.agents.action_agent import action_agent_node
 from orchestrator.agents.escalation_agent import escalation_agent_node
 from orchestrator.agents.rag_agent import rag_agent_node

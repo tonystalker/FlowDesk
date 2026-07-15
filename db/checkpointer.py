@@ -6,12 +6,11 @@ core graph definition, adhering to Dependency Inversion.
 
 import logging
 import sqlite3
+from contextlib import contextmanager
 
 import config
 
 logger = logging.getLogger(__name__)
-
-from contextlib import contextmanager
 
 @contextmanager
 def get_checkpointer():
