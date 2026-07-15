@@ -9,7 +9,6 @@ Endpoints (build_guide §4.1):
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
 
