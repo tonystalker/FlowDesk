@@ -25,11 +25,28 @@ def get_checkpointer():
     if db_url.startswith("postgresql"):
         try:
             from langgraph.checkpoint.postgres import PostgresSaver
+            from psycopg_pool import ConnectionPool
 
             logger.info("Using PostgreSQL checkpointer: %s", db_url[:30] + "...")
-            with PostgresSaver.from_conn_string(db_url) as memory:
-                memory.setup()
-                yield memory
+            
+            # Use explicit pool to disable prepared statements (fixes Supabase pooler hangs)
+            # and set a connection timeout so it fails cleanly instead of hanging forever.
+            pool_kwargs = {
+                "kwargs": {
+                    "connect_timeout": 10,
+                    "prepare_threshold": None,
+                },
+                "max_size": 10,
+            }
+            
+            # Since get_checkpointer is a generator, we must manage the pool lifecycle
+            pool = ConnectionPool(db_url, **pool_kwargs)
+            try:
+                with PostgresSaver(pool) as memory:
+                    memory.setup()
+                    yield memory
+            finally:
+                pool.close()
             return
         except Exception as e:
             logger.warning(

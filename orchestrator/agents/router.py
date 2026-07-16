@@ -14,6 +14,9 @@ def route_intent(state: SupportState) -> SupportState:
     llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
     structured_llm = llm.with_structured_output(IntentClassification)
     
+    import logging
+    logger = logging.getLogger(__name__)
+    
     # Extract the last message text
     last_message = messages[-1]
     query = last_message.content if hasattr(last_message, "content") else str(last_message)
@@ -28,7 +31,14 @@ def route_intent(state: SupportState) -> SupportState:
     User query: {query}
     """
     
-    response = structured_llm.invoke(prompt)
+    logger.info("route_intent: Starting Groq invocation")
+    try:
+        response = structured_llm.invoke(prompt)
+        logger.info(f"route_intent: Groq invocation finished, response={response}")
+    except Exception as e:
+        logger.error(f"route_intent: Groq invocation failed with error: {e}")
+        raise
+    
     intent = response.intent if response and hasattr(response, "intent") else "faq"
     
     # Ensure intent is valid

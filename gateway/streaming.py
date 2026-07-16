@@ -2,6 +2,9 @@ import json
 import asyncio
 from typing import AsyncGenerator
 
+import logging
+logger = logging.getLogger(__name__)
+
 async def generate_sse_stream(
     compiled_graph,
     initial_state: dict,
@@ -14,10 +17,20 @@ async def generate_sse_stream(
     """
     try:
         loop = asyncio.get_running_loop()
+        logger.info(f"SSE stream started: Invoking graph with config {thread_config}")
+        
+        # We will wrap the invoke to log inside the executor
+        def invoke_graph():
+            logger.info("Inside executor: Starting compiled_graph.invoke")
+            res = compiled_graph.invoke(initial_state, config=thread_config)
+            logger.info("Inside executor: Finished compiled_graph.invoke")
+            return res
+            
         result = await loop.run_in_executor(
             None,
-            lambda: compiled_graph.invoke(initial_state, config=thread_config)
+            invoke_graph
         )
+        logger.info("SSE stream: graph execution completed successfully")
         
         final_msg = ""
         if result.get("messages"):

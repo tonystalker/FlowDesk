@@ -21,7 +21,8 @@ def get_db():
     """Return a thread-safe session factory, creating the engine on first call."""
     global _engine, _SessionLocal
     if _SessionLocal is None:
-        _engine = create_engine(config.settings.database_url)
+        # Added pool_pre_ping=True to handle stale connections in Serverless environments
+        _engine = create_engine(config.settings.database_url, pool_pre_ping=True, pool_recycle=300)
         _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
     return _SessionLocal
 
