@@ -10,7 +10,7 @@ build/
 .env
 
 # BM25 index (generated artifact)
-bm25_index.pkl
+# bm25_index.pkl removed from gitignore because Cloud Run needs it
 
 # IDE
 .vscode/
