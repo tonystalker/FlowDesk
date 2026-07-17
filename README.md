@@ -1,4 +1,4 @@
-# 🚀 FlowDesk
+#  FlowDesk
 
 An intelligent, multi-agent customer support platform built with **LangGraph**, **hybrid RAG retrieval**, and **multi-model routing** (Groq Llama 3 + Google Gemini). FlowDesk automatically classifies customer intent, retrieves relevant documentation, generates grounded answers with confidence scoring, and seamlessly escalates to human agents when necessary.
 
